@@ -12,6 +12,21 @@ class Watch(BaseHandler):
 		self.watchlist_map=watchlist_map
 		self.watchers=watchers
 		self.queue_map=queue_map
+		for env in watchlist_map.keys():
+			self.logger.info("Loading list of previously watched events from {ds}".format(ds=watchlist_map[env]))
+			for event_id, age in watchlist_map[env].get_event_ages():
+				self.logger.debug("Watched event {ev} is {age} seconds old".format(ev=event_id, age=age//1000))
+				remaining_time = 30000 - age
+				data=watchlist_map[env].get_merged(event_id)
+				if remaining_time > 0:
+					self.logger.verbose("Setting timeout for event {ev} to {secs} seconds".format(
+						secs=remaining_time//1000, ev=event_id))
+					self.watchers[data['mand']['eventId']]=gevent.spawn(self.watch, data, env, remaining_time/1000)
+				else:
+					self.logger.verbose(
+						"Event {ev} is already stale, setting status to 'No issue created'.".format(ev=event_id))
+					self.watchers[data['mand']['eventId']]=gevent.spawn(self.watch, data, env, 0)
+
 	def watch(self, event, env, timeout):
 		try:
 			event_id = event['mand']['eventId']
